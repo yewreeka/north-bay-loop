@@ -46,7 +46,9 @@ table.av{border-collapse:collapse;font-size:11px;font-family:var(--ff-m);width:1
 #map{width:100%;height:100%;display:block;cursor:grab} #map.drag{cursor:grabbing}
 .tiles{filter:var(--tilefilter)}
 .leg .halo{fill:none;stroke:var(--halo);stroke-linejoin:round;stroke-linecap:round;opacity:.85} .leg .line{fill:none;stroke-linejoin:round;stroke-linecap:round} .leg .surf{fill:none;stroke:var(--halo);stroke-linecap:butt}
-.leg.dim .line,.leg.dim .surf{opacity:.22} .leg.sel .halo{opacity:1} .leg.dim .halo{opacity:.2} .leg{cursor:pointer}
+.leg.dim .line,.leg.dim .surf{opacity:.22} .leg.sel .halo{opacity:1} .leg.inactive:not(.sel) .line{opacity:.8}
+.variant{display:flex;flex-direction:column;gap:4px;margin:0 0 12px} .variant label{font-family:var(--ff-m);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)} .variant select{font:inherit;font-size:13px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);width:100%} .variant .vsum{font-size:12px;color:var(--ink2)}
+.dcard.inactive{opacity:.55} .dcard.inactive .sw{height:3px;border-radius:0;width:16px} .chip.inactive .sw{height:3px;border-radius:0;width:14px} .leg.dim .halo{opacity:.2} .leg{cursor:pointer}
 .ferry .line{fill:none;stroke:#7C837E;stroke-dasharray:4 8;stroke-linecap:round} .ferry .halo{fill:none;stroke:var(--halo)}
 .pin{cursor:pointer} .pin circle{stroke:var(--halo);stroke-width:3} .pin.camp circle{fill:var(--ink)} .pin.start circle,.pin.end circle{fill:var(--bg);stroke:var(--ink);stroke-width:3}
 .pin text.num{font-family:var(--ff-m);font-size:12px;font-weight:600;fill:var(--bg);pointer-events:none} .pin.start text.num,.pin.end text.num{fill:var(--ink)}
@@ -105,7 +107,7 @@ table.av{border-collapse:collapse;font-size:11px;font-family:var(--ff-m);width:1
    <g id="legs"></g><g id="ferry"></g><g id="pois"></g><g id="camps"></g><g id="hover"></g>
   </g>
  </svg>
- <div id="legend">solid <i></i> paved<br>dashes <i class="dash"></i> dirt / fire road<br>dots <i class="dot"></i> singletrack<br>thin line = Sunday alternative</div>
+ <div id="legend">solid <i></i> paved<br>dashes <i class="dash"></i> dirt / fire road<br>dots <i class="dot"></i> singletrack<br>thin dashed line = not in the chosen itinerary</div>
  <div id="ctrl"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" class="small" aria-label="Fit whole route">fit</button></div>
  <div id="drawer" hidden><div class="dh"><b id="dname"></b><span class="m" id="dnum"></span><button class="x" id="dclose" aria-label="Close elevation">×</button></div><svg id="prof" viewBox="0 0 800 96" preserveAspectRatio="none"></svg><div id="ptip" hidden></div></div>
  <div id="attr">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</div>
@@ -145,8 +147,7 @@ const legEls={};
 [...D.days].sort((a,b)=>(a.kind==='alt'?0:1)-(b.kind==='alt'?0:1)).forEach(d=>{
   const g=document.createElementNS('http://www.w3.org/2000/svg','g'); g.setAttribute('class','leg '+d.kind); g.dataset.d=d.id;
   const p=pathOf(d.pts);
-  if(d.kind==='alt'){ g.innerHTML=`<path class="halo" d="${p}"/><path class="line" d="${d.paved.map(r=>pathOf(r)).join(' ')||'M0,0'}"/>`+d.runs.map(r=>`<path class="line adash ${r[0]}" d="${pathOf(r[1])}"/>`).join(''); }
-  else { g.innerHTML=`<path class="halo" d="${p}"/><path class="line" d="${p}"/>`+d.runs.map(r=>`<path class="surf ${r[0]}" d="${pathOf(r[1])}"/>`).join(''); }
+  g.innerHTML=`<path class="halo" d="${p}"/><path class="line" d="${p}"/>`+d.runs.map(r=>`<path class="surf ${r[0]}" d="${pathOf(r[1])}"/>`).join('');
   g.addEventListener('click',e=>{ e.stopPropagation(); selectDay(d.id,true); });
   legsG.appendChild(g); legEls[d.id]=g;
 });
@@ -165,7 +166,7 @@ D.pois.forEach(p=>{ const g=document.createElementNS('http://www.w3.org/2000/svg
   g.addEventListener('click',e=>{e.stopPropagation(); selectPoi(p.id,false);});
   poisG.appendChild(g); poiEls[p.id]=g; fixed.push({el:g,x:p.xy[0],y:p.xy[1]}); });
 function rescale(k){ const s=1/Math.max(0.55,Math.min(3.2,k)); fixed.forEach(f=>f.el.setAttribute('transform',`translate(${f.x},${f.y}) scale(${s.toFixed(3)})`)); const lw=Math.max(0.7,Math.min(1.6,1/k));
-  document.querySelectorAll('.leg').forEach(g=>{ const alt=g.classList.contains('alt')&&!g.classList.contains('sel'); g.querySelector('.halo').style.strokeWidth=(alt?8:14)*lw; g.querySelectorAll('.line').forEach(l=>{ l.style.strokeWidth=(alt?3:6)*lw; if(l.classList.contains('adash')){ l.style.strokeDasharray=l.classList.contains('trail')?`${2*lw} ${5*lw}`:`${7*lw} ${6*lw}`; l.style.strokeLinecap='round'; } }); g.querySelectorAll('.surf').forEach(s=>{ if(s.classList.contains('dirt')){s.style.strokeWidth=(alt?1.2:2)*lw; s.style.strokeDasharray=`${9*lw} ${9*lw}`;} else if(s.classList.contains('trail')){s.style.strokeWidth=(alt?1.4:2.4)*lw; s.style.strokeDasharray=`${2.5*lw} ${7*lw}`; s.style.strokeLinecap='round';} else {s.style.stroke='#C62828'; s.style.strokeWidth=2.4*lw; s.style.strokeDasharray=`${2.5*lw} ${5*lw}`;} }); });
+  document.querySelectorAll('.leg').forEach(g=>{ const alt=g.classList.contains('inactive')&&!g.classList.contains('sel'); g.querySelector('.halo').style.strokeWidth=(alt?8:14)*lw; g.querySelectorAll('.line').forEach(l=>{ l.style.strokeWidth=(alt?3:6)*lw; l.style.strokeDasharray=alt?`${8*lw} ${6*lw}`:''; }); g.querySelectorAll('.surf').forEach(s=>{ s.style.display=alt?'none':''; if(s.classList.contains('dirt')){s.style.strokeWidth=(alt?1.2:2)*lw; s.style.strokeDasharray=`${9*lw} ${9*lw}`;} else if(s.classList.contains('trail')){s.style.strokeWidth=(alt?1.4:2.4)*lw; s.style.strokeDasharray=`${2.5*lw} ${7*lw}`; s.style.strokeLinecap='round';} else {s.style.stroke='#C62828'; s.style.strokeWidth=2.4*lw; s.style.strokeDasharray=`${2.5*lw} ${5*lw}`;} }); });
   fg.querySelector('.line').style.strokeWidth=3*lw; fg.querySelector('.halo').style.strokeWidth=6*lw; }
 // ---------- colours
 function paint(){ D.days.forEach(d=>{ const g=legEls[d.id]; g.querySelectorAll('.line').forEach(l=>l.style.stroke=col(d)); }); }
@@ -181,19 +182,32 @@ function closeTip(){ if(tipEl){tipEl.remove(); tipEl=null;} document.querySelect
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeTip(); } });
 // ---------- days
 const chips=document.getElementById('chips'), plan=document.getElementById('pane-plan');
-D.days.forEach(d=>{ const b=document.createElement('button'); b.className='chip'+(d.kind==='alt'?' alt':''); b.setAttribute('aria-pressed','false'); b.dataset.d=d.id; b.innerHTML=`<span class="sw" style="background:${d.col}"></span>${d.short}`; b.onclick=()=>selectDay(sel===d.id?null:d.id,true); chips.appendChild(b); });
+D.days.forEach(d=>{ const b=document.createElement('button'); b.className='chip'; b.setAttribute('aria-pressed','false'); b.dataset.d=d.id; b.innerHTML=`<span class="sw" style="background:${d.col}"></span>${d.short}`; b.onclick=()=>selectDay(sel===d.id?null:d.id,true); chips.appendChild(b); });
 function surfBar(d){ const s=d.surf, tot=s.paved+s.dirt+s.trail+s.walk||1; return `<div class="surfbar">${['paved','dirt','trail','walk'].map(c=>`<span class="${c}" style="width:${(s[c]/tot*100).toFixed(1)}%"></span>`).join('')}</div><div class="surflbl">${['paved','dirt','trail'].filter(c=>s[c]>=0.5).map(c=>s[c].toFixed(0)+' '+c).join(' · ')}${s.walk>=0.1?' · '+s.walk.toFixed(1)+' walk':''} mi</div>`; }
-let html='<h3 class="sec">Riding days</h3>';
-D.days.forEach(d=>{ html+=`<div class="dcard ${d.kind}" data-d="${d.id}"><div class="top"><span class="sw" style="background:${d.col}"></span><b>${d.name}</b><span class="num">${d.miles} mi · ${d.gain.toLocaleString()} ft</span></div><div class="ft">${d.from} → ${d.to}</div>${surfBar(d)}<div class="blurb">${d.blurb}</div></div>`; });
-const main=D.days.filter(d=>d.kind==='main'); const miA=main.filter(d=>d.id!=='mon_b').reduce((a,d)=>a+d.miles,0), miB=main.filter(d=>d.id!=='mon').reduce((a,d)=>a+d.miles,0), ftA=main.filter(d=>d.id!=='mon_b').reduce((a,d)=>a+d.gain,0), ftB=main.filter(d=>d.id!=='mon').reduce((a,d)=>a+d.gain,0);
-html+=`<p class="note">Totals: ${miA.toFixed(0)} mi and ${ftA.toLocaleString()} ft via the ferry, or ${miB.toFixed(0)} mi and ${ftB.toLocaleString()} ft over the bridge. Friday is the hard day on purpose; the trip tapers to a flat roll to the boat. Sunday alternatives keep you in the woods at roughly double the climbing.</p>`;
+const VARS=[["sun","mon","Road Sunday · ferry home"],["sun","mon_b","Road Sunday · ride the bridge home"],["sun_alt1","mon","Alt 1 Sunday, ridge and coast · ferry home"],["sun_alt1","mon_b","Alt 1 Sunday, ridge and coast · bridge home"],["sun_alt2","mon","Alt 2 Sunday, watershed · ferry home"],["sun_alt2","mon_b","Alt 2 Sunday, watershed · bridge home"]];
+let variant=0;
+let html='<div class="variant"><label for="vsel">Itinerary</label><select id="vsel">'+VARS.map((v,i)=>`<option value="${i}">${v[2]}</option>`).join('')+'</select><div class="vsum" id="vsum"></div></div><h3 class="sec">Riding days</h3>';
+D.days.forEach(d=>{ html+=`<div class="dcard" data-d="${d.id}"><div class="top"><span class="sw" style="background:${d.col}"></span><b>${d.name}</b><span class="num">${d.miles} mi · ${d.gain.toLocaleString()} ft</span></div><div class="ft">${d.from} → ${d.to}</div>${surfBar(d)}<div class="blurb">${d.blurb}</div></div>`; });
+html+=`<p class="note" id="vnote"></p>`;
 html+='<h3 class="sec">Nights</h3>';
 D.camps.forEach((c,i)=>{ html+=`<div class="camp" data-c="${i}"><span class="b ${c.kind!=='camp'?'hollow':''}">${c.kind==='camp'?c.night:(c.kind==='start'?'S':'E')}</span><div><h4>${c.n} ${c.status?`<span class="st ${c.status}">${c.status}</span>`:''}</h4><p>${c.when}</p></div></div>`; });
 plan.innerHTML=html;
 plan.querySelectorAll('.dcard').forEach(el=>el.onclick=()=>selectDay(sel===el.dataset.d?null:el.dataset.d,true));
+function activeSet(){ const v=VARS[variant]; return ['thu','fri','sat',v[0],v[1]]; }
+function applyVariant(){ const act=activeSet(); const v=VARS[variant];
+  D.days.forEach(d=>{ const on=act.includes(d.id); legEls[d.id].classList.toggle('inactive',!on); const c=plan.querySelector(`.dcard[data-d="${d.id}"]`); c.classList.toggle('inactive',!on); const ch=chips.querySelector(`.chip[data-d="${d.id}"]`); ch.classList.toggle('inactive',!on); });
+  // order cards: active first in ride order, then the rest
+  const order=act.concat(D.days.map(d=>d.id).filter(id=>!act.includes(id))); order.forEach(id=>{ const c=plan.querySelector(`.dcard[data-d="${id}"]`); c.parentNode.insertBefore(c, document.getElementById('vnote')); });
+  act.forEach(id=>legsG.appendChild(legEls[id])); if(sel)legsG.appendChild(legEls[sel]);
+  const ds=act.map(id=>D.days.find(d=>d.id===id)); const mi=ds.reduce((a,d)=>a+d.miles,0), ft=ds.reduce((a,d)=>a+d.gain,0); const sf={paved:0,dirt:0,trail:0,walk:0}; ds.forEach(d=>{for(const k in sf)sf[k]+=d.surf[k]});
+  const hard=ds.reduce((a,d)=>d.gain>a.gain?d:a,ds[0]);
+  document.getElementById('vsum').textContent=`${mi.toFixed(0)} mi · ${ft.toLocaleString()} ft · ${sf.paved.toFixed(0)} paved / ${(sf.dirt+sf.trail).toFixed(0)} dirt and trail mi`;
+  document.getElementById('vnote').textContent=`This itinerary: ${mi.toFixed(0)} miles and ${ft.toLocaleString()} ft over five days. Hardest day is ${hard.name} at ${hard.gain.toLocaleString()} ft. ${v[0]==='sun'?'Sunday is the road version; the two alternatives keep you in the woods at roughly double the climbing.':'Sunday is one of the off-road versions, so it becomes the second hard day of the trip.'} ${v[1]==='mon'?'Monday ends with a flat roll to the Sausalito ferry.':'Monday rides the bridge home instead of taking the boat.'} Faded legs are the versions not in this itinerary; click any of them to see it anyway.`;
+  const h=location.hash.replace(/[&#]?v=\d/,''); history.replaceState(null,'',(h&&h!=='#'?h+'&':'#')+'v='+variant); apply(); }
+document.getElementById('vsel').onchange=e=>{ variant=+e.target.value; applyVariant(); };
 plan.querySelectorAll('.camp').forEach(el=>el.onclick=()=>{ const c=D.camps[+el.dataset.c]; fitBox(c.xy[0]-600,c.xy[1]-400,c.xy[0]+600,c.xy[1]+400); openTip({title:c.n,when:c.when,note:c.note,status:c.status,xy:c.xy,lat:c.lat,lon:c.lon}); });
 function selectDay(id,fit){ sel=id; document.querySelectorAll('.leg').forEach(g=>{ g.classList.toggle('dim',!!id&&g.dataset.d!==id); g.classList.toggle('sel',g.dataset.d===id); }); apply(); document.querySelectorAll('.chip[data-d]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.d===id?'true':'false')); document.querySelectorAll('.dcard').forEach(c=>c.classList.toggle('sel',c.dataset.d===id));
-  if(id){ const d=D.days.find(x=>x.id===id); legsG.appendChild(legEls[id]); if(fit){ const xs=d.pts.map(p=>p[0]), ys=d.pts.map(p=>p[1]); fitBox(Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys),0.15); } showProfile(d); const c=document.querySelector(`.dcard[data-d="${id}"]`); if(c)c.scrollIntoView({block:'nearest'}); location.hash='day='+id; } else { document.getElementById('drawer').hidden=true; document.getElementById('hover').innerHTML=''; if(location.hash)history.replaceState(null,'',location.pathname); } }
+  if(id){ const d=D.days.find(x=>x.id===id); legsG.appendChild(legEls[id]); if(fit){ const xs=d.pts.map(p=>p[0]), ys=d.pts.map(p=>p[1]); fitBox(Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys),0.15); } showProfile(d); const c=document.querySelector(`.dcard[data-d="${id}"]`); if(c)c.scrollIntoView({block:'nearest'}); location.hash='day='+id+'&v='+variant; } else { document.getElementById('drawer').hidden=true; document.getElementById('hover').innerHTML=''; if(location.hash)history.replaceState(null,'',location.pathname); } }
 // ---------- profile drawer
 const prof=document.getElementById('prof'), drawer=document.getElementById('drawer'), ptip=document.getElementById('ptip');
 const YMAX=Math.ceil(Math.max(...D.days.map(d=>d.high))/500)*500;
@@ -229,7 +243,7 @@ function applyFilter(){ D.pois.forEach(p=>{ poiEls[p.id].classList.toggle('off',
 function togglePick(id){ picks[id]=!picks[id]; savePicks(); renderStops(); applyFilter(); }
 function selectPoi(id,fly){ const p=D.pois.find(x=>x.id===id); closeTip(); poiEls[id].classList.add('sel'); const row=stops.querySelector(`.poi[data-p="${id}"]`); if(row){row.classList.add('sel'); row.scrollIntoView({block:'nearest'});}
   if(fly){ const k=W/vb.w*(wrap.clientWidth/W); if(k<1.8){ fitBox(p.xy[0]-500,p.xy[1]-350,p.xy[0]+500,p.xy[1]+350,0); } else { vb.x=p.xy[0]-vb.w/2; vb.y=p.xy[1]-vb.h/2; apply(); } }
-  openTip({title:p.n,when:CATN[p.cat]+' · '+p.town+' · '+p.when,note:p.note,xy:p.xy,lat:p.lat,lon:p.lon,poi:p.id}); location.hash='stop='+id; }
+  openTip({title:p.n,when:CATN[p.cat]+' · '+p.town+' · '+p.when,note:p.note,xy:p.xy,lat:p.lat,lon:p.lon,poi:p.id}); location.hash='stop='+id+'&v='+variant; }
 renderStops(); applyFilter();
 // ---------- camps pane
 const cp=document.getElementById('pane-camps'); const A=D.avail; const wd=['Wed','Thu','Fri','Sat','Sun','Mon','Tue'];
@@ -241,7 +255,7 @@ cp.innerHTML=ch;
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b?'true':'false')); ['plan','stops','camps','info'].forEach(t=>document.getElementById('pane-'+t).hidden=(t!==b.dataset.t)); });
 const aside=document.getElementById('aside'), mtog=document.getElementById('mtog'); mtog.onclick=()=>{ const o=!aside.classList.contains('open'); aside.classList.toggle('open',o); mtog.setAttribute('aria-expanded',o?'true':'false'); mtog.textContent=o?'Hide panel ▾':'Plan, stops and camps ▴'; };
 // ---------- boot
-function boot(){ fitAll(); const m=location.hash.match(/day=([a-z_0-9]+)/); const s=location.hash.match(/stop=(\d+)/); if(m&&D.days.find(d=>d.id===m[1]))selectDay(m[1],true); else if(s)selectPoi(+s[1],true); }
+function boot(){ const vm=location.hash.match(/v=(\d)/); if(vm&&VARS[+vm[1]]){ variant=+vm[1]; document.getElementById('vsel').value=String(variant); } applyVariant(); fitAll(); const m=location.hash.match(/day=([a-z_0-9]+)/); const s=location.hash.match(/stop=(\d+)/); if(m&&D.days.find(d=>d.id===m[1]))selectDay(m[1],true); else if(s)selectPoi(+s[1],true); }
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(boot); else boot();
 setTimeout(apply,50);
 })();
